@@ -2,7 +2,6 @@
 from rest_framework.views import APIView, Request, Response, status
 from django.shortcuts import render
 from .models import Pet
-import ipdb
 from groups.models import Group
 from traits.models import Trait
 from django.forms.models import model_to_dict
@@ -13,7 +12,6 @@ from rest_framework.pagination import PageNumberPagination
 
 class PetView(APIView, PageNumberPagination):
     def get(self, request: Request) -> Response:
-
         pets = Pet.objects.all()
         result_page = self.paginate_queryset(pets, request, view=self)
 
@@ -26,30 +24,54 @@ class PetView(APIView, PageNumberPagination):
         serializer = PetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        group_data = serializer.validated_data.pop("group")
-        traits_data = serializer.validated_data.pop("traits")
+        group_list = serializer.validated_data.pop("group")
+        traits_list = serializer.validated_data.pop("traits")
 
-        pet_obj = Pet.objects.create(**serializer.validated_data)
-        Group.objects.create(**group_data, pet=pet_obj)
-        Trait.objects.create(**traits_data, pet=pet_obj)
+        group_obj = Group.objects.filter(
+            scientific_name__iexact=group_list["scientific_name"]
+        ).first()
 
-        serializer = PetSerializer(pet_obj)
+        if not group_obj:
+            group_obj = Group.objects.create(**group_list)
+
+        pet: Pet = Pet.objects.create(
+            **serializer.validated_data, group=group_obj)
+
+        for trait_dict in traits_list:
+            trait_obj = Trait.objects.filter(
+                name__iexact=trait_dict["name"]
+            ).first()
+
+            if not trait_obj:
+                trait_obj = Trait.objects.create(**trait_dict)
+
+            pet.traits.add(trait_obj)
+
+        serializer = PetSerializer(pet)
 
         return Response(serializer.data, 201)
 
 
 class PetDetailView(APIView):
-    def get(self, request):
+    def get(self, request: Request):
 
-        trait = request.query_params.get("trait", None)
+        trait = request.query_params.get("traits", None)
 
         pets = Pet.objects.filter(
-            trait=trait
+            trait_name=trait
         )
 
-        serializer = PetSerializer(pets)
+        serializer = PetSerializer(pets, many=True)
 
         return Response(serializer.data)
+
+    def get(self, request: Request, pet_id):
+
+        pet = Pet.objects.get(pk=pet_id)
+
+        serializer = PetSerializer(pet)
+
+        return Response(serializer.data, status.HTTP_200_OK)
 
     def patch(self, request: Request, pet_id: int) -> Response:
 

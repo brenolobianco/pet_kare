@@ -16,14 +16,13 @@ class Pet(models.Model):
         choices=Sex.choices,
         default=Sex.DEFAULT,
     )
-
     group = models.ForeignKey(
         "groups.Group",
         on_delete =models.PROTECT,
-        related_name="pets",null=True,
-
-                )
+        related_name="pets",null=True,)
+    
     traits = models.ManyToManyField(
         "traits.Trait", 
+        
        
     )
